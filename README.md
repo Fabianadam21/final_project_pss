@@ -2,7 +2,6 @@
 
 Simple LMS adalah sistem manajemen pembelajaran berbasis web yang dibangun dengan Django REST Framework. Proyek ini menonjolkan kemampuan asynchronous untuk menjaga responsivitas dan otomatisasi proses berat.
 
-> Catatan penting: repository awal digunakan sebagai referensi struktur. Fitur asynchronous, monitoring, dan perbaikan Docker diselesaikan dan disesuaikan secara mandiri.
 
 ## Ringkasan Teknologi
 

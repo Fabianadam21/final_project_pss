@@ -66,7 +66,6 @@ git clone https://github.com/Fabianadam21/final_project_pss.git
 docker compose up -d --build
 ```
 
-Jika image sudah tersedia:
 
 ```bash
 docker compose up -d

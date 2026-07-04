@@ -11,13 +11,11 @@
 
 ## Deskripsi Proyek
 
-Simple LMS adalah sistem manajemen pembelajaran berbasis web yang dibangun dengan Django REST Framework dan teknologi modern seperti:
-- **Celery** untuk background task processing
-- **Redis** untuk caching
-- **MongoDB** untuk activity logging
-- **RabbitMQ** sebagai message broker
+Project yang saya kembangkan merupakan sebuah Learning Management System (LMS) berbasis web menggunakan Django REST Framework. Sistem ini dirancang agar proses pembelajaran dapat dilakukan secara terstruktur melalui pengelolaan course, materi, progress belajar, hingga penerbitan sertifikat.
 
-Sistem mendukung tiga peran pengguna (Admin, Instructor, Student) untuk mengelola course, enrollment, tracking progress, dan generate sertifikat serta laporan secara otomatis. Semua proses berat berjalan secara asynchronous tanpa mengganggu pengalaman pengguna.
+Selain menyediakan fitur utama LMS, project ini juga menerapkan beberapa teknologi pendukung seperti Docker, PostgreSQL, Redis, MongoDB, RabbitMQ, dan Celery. Integrasi teknologi tersebut bertujuan meningkatkan performa aplikasi, terutama dalam menangani proses yang membutuhkan waktu lama agar tidak menghambat pengguna ketika mengakses sistem.
+
+Dengan adanya mekanisme asynchronous processing, aplikasi tetap responsif walaupun sedang menjalankan proses berat seperti pembuatan sertifikat ataupun pengiriman email notifikasi.
 
 ---
 
@@ -50,40 +48,33 @@ Sistem mendukung tiga peran pengguna (Admin, Instructor, Student) untuk mengelol
 
 ## Penjelasan Implementasi
 
-Proyek ini mengimplementasikan arsitektur asynchronous processing menggunakan Celery dan RabbitMQ untuk menangani tugas-tugas berat di background. Tujuannya adalah meningkatkan responsivitas aplikasi agar pengguna tidak menunggu saat menjalankan proses seperti pengiriman email, pembuatan sertifikat, dan ekspor laporan.
+Proyek ini menerapkan arsitektur asynchronous untuk memindahkan proses berat ke background. Hal ini menjaga responsivitas API saat pengguna melakukan aktivitas yang memerlukan waktu lebih lama.
 
 ### 1. Email Notification Async
 
-Fitur ini mengirimkan notifikasi email secara asynchronous saat pengguna mendaftar ke course. Ketika pengguna mengakses `/api/enrollments-async`:
-1. Sistem mencatat enrollment dan segera mengembalikan response
-2. T2. Generate Certificate/Report Async
+Pada endpoint `/api/enrollments-async`:
+- Enrollment langsung disimpan ke database.
+- Task Celery `send_enrollment_email` dipicu untuk mengirim email di background.
+- Response API kembali cepat tanpa menunggu proses email selesai.
 
-Fitur ini menangani pembuatan sertifikat PDF dan laporan CSV secara asynchronous:
+### 2. Generate Certificate/Report Async
 
-**Generate Certificate:**
-- Pengguna menyelesaikan course via `/api/courses/{id}/complete-async`
-- Celery Worker memproses pembuatan PDF di background menggunakan ReportLab
-- File PDF disimpan di `media/certificates/`
+Proses pembuatan file dipisahkan dari request utama:
+- `/api/courses/{id}/complete-async` memicu task `generate_certificate`.
+- `/api/courses/{id}/export-async` memicu task `export_course_report`.
+- Sertifikat PDF dibuat dengan ReportLab dan disimpan di `media/certificates/`.
+- Laporan CSV dibuat dengan modul `csv` dan disimpan di `media/reports/`.
+- Volume `./media:/app/media` ditambahkan pada service Celery agar file tersedia di host.
+- Task menggunakan `settings.MEDIA_ROOT` untuk memastikan path file konsisten.
 
-**Export Report:**
-- Ad3. Scheduled Task - Celery Beat
+### 3. Scheduled Task - Celery Beat
 
-Fitur ini menjalankan task secara periodik menggunakan Celery Beat:
+Saya menambahkan scheduler periodik di `lms/celery.py`:
+- `update_course_statistics` dijalankan setiap jam.
+- `send_daily_report` dijalankan setiap hari pukul 00:00.
+- Ini memastikan statistik dan laporan harian selalu terbarui.
 
-**Task yang Dijadwalkan:**
-1. `update_course_statistics` - Setiap jam: menghitung jumlah member dan update statistik course
-2. `send_daily_report` - Tengah malam (00:00): mengirim laporan harian ke admin via email
-
-**Konfigurasi (celery.py):**
-- Schedule per jam: `crontab(minute=0, hour='*/1')`
-- Schedule harian: `crontab(hour=0, minute=0)`
-
-Task berjalan otomatis tanpa intervensi
-- Implementasi menggunakan task `generate_certificate` dan `export_course_report`
-
-Proses berat tidak menghambat pengguna lain mengakses aplikasi
-
-Impl4. Task Status Endpoint
+### 4. Task Status Endpoint
 
 Endpoint `/api/tasks/{task_id}` memungkinkan pengguna untuk memonitor status task asynchronous. Informasi yang tersedia:
 - **Status**: PENDING, STARTED, SUCCESS, atau FAILURE
@@ -91,32 +82,25 @@ Endpoint `/api/tasks/{task_id}` memungkinkan pengguna untuk memonitor status tas
 - **Hasil task**: Data output jika sudah selesai
 - **Waktu penyelesaian**: Kapan task selesai dijalankan
 
-Implementasi menggunakan `AsyncResult` dari Celery. Sangat berguna untuk memonitor task berdurasi lama
+Implementasi menggunakan `AsyncResult` dari Celery. Sangat berguna untuk memonitor task berdurasi lama.
 
-Fitur ini menangani pembuatan sertifikat PDF dan laporan CSV secara asynchronous. Pada proses generate certificate, pengguna menyelesaikan course melalui endpoint /api/courses/{id}/complete-async, kemudian Celery Worker langsung memproses pembuatan sertifikat PDF di latar belakang. File PDF yang dihasilkan disimpan di folder media/certificates/. Untuk ekspor laporan, admin atau teacher dapat mengakses endpoint /api/courses/{id}/export-async untuk menghasilkan laporan CSV yang juga diproses secara asynchronous dan disimpan di folder media/reports/. Implementasi ini menggunakan task generate_certificate dengan library reportlab untuk generate PDF, serta task export_course_report dengan library csv untuk generate laporan. Kedua task ini memastikan bahwa proses berat tidak menghambat pengguna lain.
+### 5. Flower Monitoring
 
-### SCHEDULED TASK - CELERY BEAT
+Flower dipasang sebagai service terpisah di Docker Compose.
+- Akses: `http://localhost:5555`
+- Menampilkan status worker, status task, dan antrean RabbitMQ.
+- Membantu mendeteksi task gagal dan memonitor kinerja worker.
 
-Fitu5. Flower Monitoring
+## Integrasi Sistem
 
-Flower menyediakan dashboard real-time untuk memonitor Celery. Dapat diakses di `http://localhost:5555` dan menampilkan:
-- **Status Worker**: Daftar worker yang sedang online
-- **Daftar Task**: Task yang telah dijalankan beserta statusnya (SUCCESS, FAILURE, PENDING)
-- **Informasi Broker**: Koneksi RabbitMQ dan message queue
+Alur kerja sistem:
+- Django API menerima request pengguna.
+- Task asynchronous dikirim ke RabbitMQ.
+- Worker Celery memproses task di background.
+- Hasil disimpan ke database atau folder media.
+- Flower memberikan monitoring runtime.
 
-Flower berjalan sebagai container terpisah dan terhubung langsung dengan Celery Worker dan RabbitMQ. Memudahkan deteksi kegagalan pada task Celery
-
-Fitur ini memungkinkan pengguna untuk mengecek status tugas asynchronous yang sedang berjalan. Pengguna dapat mengakses endpoint /api/tasks/{task_id} untuk melihat informasi lengkap tentang suatu task, termasuk status saat ini (PENDING, STARTED, SUCCESS, atau FAILURE), pesan status yang informatif, hasil tugas jika sudah selesai, dan waktu penyelesaian jika task telah sukses. Implementasi ini menggunakan AsyncResult dari Celery untuk mengambil informasi task berdasarkan task_id yang diberikan. Endpoint ini sangat berguna bagi pengguna untuk memantau progres tugas yang memakan waktu lama, seperti pembuatan sertifikat atau ekspor laporan.
-Integrasi Sistem
-
-Semua fitur bekerja secara terintegrasi:
-- **Celery** = Task queue untuk eksekusi background
-- **RabbitMQ** = Message broker mengantarkan tugas dari Django ke Celery Worker
-- **Flower** = Dashboard monitoring kesehatan sistem
-- **Docker** = Container orchestration untuk scalability
-
-Arsitektur ini memastikan aplikasi tetap responsif meskipun sedang memproses tugas-tugas berat,
-Fitur ini menyediakan antarmuka monitoring untuk memantau aktivitas Celery secara real-time. Flower dapat diakses melalui http://localhost:5555 dan menampilkan informasi penting seperti status worker yang sedang online, daftar task yang telah dijalankan beserta statusnya (SUCCESS, FAILURE, atau PENDING), serta informasi broker RabbitMQ yang terhubung. Dengan Flower, pengembang dapat dengan mudah memantau kesehatan sistem dan mendeteksi jika terjadi kegagalan pada task-task Celery. Flower berjalan sebagai container terpisah di Docker Compose dan terhubung langsung dengan Celery Worker dan RabbitMQ.
+Arsitektur ini memastikan aplikasi tetap responsif meskipun sedang memproses tugas-tugas berat.
 
 ### Kesimpulan
 
@@ -143,6 +127,7 @@ Jika sudah ada:
 ```bash
 docker compose up -d
 ```
+![alt text](image-1.png)
 
 ### 3. Pastikan Container Berjalan
 
@@ -299,58 +284,31 @@ MONITORING
 
 ## Kendala dan Solusi yang Dihadapi
 
-### Kendala
+Selama pengerjaan, saya menghadapi tiga masalah utama yang saya selesaikan secara bertahap. Semua solusi berikut dicoba dan diverifikasi secara langsung di dalam lingkungan Docker.
 
-1. **File tidak sinkron antara container dan host**
-   - Celery worker tidak memiliki volume mount untuk media folder
-   - Path relatif menyebabkan file tersimpan di root container
+### Kendala 1: File media tidak tersedia di host
 
-2. **Error MEDIA_ROOT tidak terdefinisi**
-   - Variable MEDIA_ROOT tidak diakses di dalam Celery task
-   - Celery Worker tidak membaca variable global dari luar task
+- Masalah: Celery worker membuat file sertifikat dan laporan, tetapi hasilnya hanya tersimpan di dalam container.
+- Analisis: Service Celery tidak memiliki shared volume `media` yang sama dengan web app.
+- Solusi: Tambahkan volume mount `./media:/app/media` di service Celery pada `docker-compose.yml`.
+- Hasil: File PDF dan CSV sekarang dapat diakses langsung dari host, sehingga data output tidak hilang saat container direstart.
 
-3. **Endpoint async tidak mengembalikan task_id**
-   - User tidak bisa mengecek status task yang sedang berjalan
-   - Respons hanya berisi pesan sukses saja
+### Kendala 2: Path MEDIA_ROOT tidak konsisten
 
-Proyek Simple LMS berhasil mengintegrasikan teknologi modern untuk membangun sistem learning management yang scalable dan responsif:
+- Masalah: Task asynchronous mengakses `MEDIA_ROOT` secara langsung dan menghasilkan error nama variabel tidak ditemukan.
+- Analisis: Celery worker tidak mewarisi variabel lingkungan dari Django settings secara otomatis.
+- Solusi: Perbaiki task agar menggunakan `settings.MEDIA_ROOT` dan import `from django.conf import settings`.
+- Hasil: Pembuatan file menjadi stabil, dan folder output selalu mengarah ke lokasi media yang benar.
 
-**Teknologi yang digunakan:**
-- Django REST Framework (backend API)
-- PostgreSQL (database utama)
-- JWT Authentication (autentikasi tiga role)
-- Celery + RabbitMQ (async task processing)
-- Redis (caching layer)
-- MongoDB (activity logging)
-- Docker (containerization)
-- Flower & Django Silk (monitoring & profiling)
+### Kendala 3: Tidak ada pemantauan task async oleh client
 
-**Pencapaian:**
-- Semua fitur async berhasil diimplementasikan
-- Task scheduling berjalan otomatis
-- Real-time monitoring dan profiling tersedia
-- API documentation lengkap via Swagger
-- Berbagai kendala teknis berhasil diatasi
-
-Proyek ini menjadi fondasi kuat untuk pengembangan sistem modern dan memberikan wawasan mendalam tentang arsitektur microservices dan praktik best practices dalam pengembangan aplikasi skala besar
-
-1. **Sinkronisasi file dengan host:**
-   - Menambahkan volume mount `./media:/app/media` pada service celery-worker di docker-compose.yml
-   - Mengubah path penyimpanan menggunakan `settings.MEDIA_ROOT`
-
-2. **Mengakses MEDIA_ROOT dari task:**
-   - Mengganti `MEDIA_ROOT` dengan `settings.MEDIA_ROOT` di dalam task export_course_report
-   - Restart Celery Worker agar kode terbaru terbaca
-
-3. **Mengembalikan task_id:**
-   - Menyimpan hasil task.delay() sebelum mengembalikan response
-   - User sekarang bisa mengecek status melalui endpoint `/api/tasks/{task_id}`
+- Masalah: Endpoint async hanya mengembalikan pesan sukses tanpa `task_id`.
+- Analisis: Tanpa ID task, pengguna tidak bisa memeriksa status pekerjaan background.
+- Solusi: Simpan objek task dari `task.delay()` dan kembalikan `task.id` dalam response.
+- Hasil: Endpoint `/api/tasks/{task_id}` bisa digunakan untuk tracking progress, menampilkan status, dan menangani error.
 
 ## Kesimpulan
 
-Final project Simple LMS ini memberikan pengalaman berharga dalam memahami implementasi Pemrograman Sistem Skala Besar secara langsung. Proyek ini berhasil mengintegrasikan teknologi modern seperti Docker dengan 8 service, PostgreSQL sebagai database utama, JWT untuk autentikasi tiga role, serta Celery dan RabbitMQ untuk asynchronous processing pada pengiriman email, pembuatan sertifikat PDF, dan ekspor laporan CSV. Celery Beat menjalankan task periodik update statistik, dan tersedia endpoint task status untuk memantau proses async. Redis digunakan untuk cache, MongoDB untuk logging aktivitas, serta Flower dan Django Silk untuk monitoring dan profiling. Dokumentasi API tersedia via Swagger/OpenAPI. Sepanjang pengerjaan, berbagai kendala teknis berhasil diatasi, memperdalam pemahaman tentang Django REST Framework dan arsitektur microservices. Proyek ini menjadi fondasi kuat untuk pengembangan sistem modern ke depannya.
+Melalui project ini saya memperoleh pengalaman dalam membangun aplikasi berbasis Django yang menerapkan konsep asynchronous processing. Integrasi Celery, RabbitMQ, Redis, MongoDB, PostgreSQL, dan Docker menunjukkan bagaimana beberapa layanan dapat bekerja bersama untuk menghasilkan sistem yang lebih efisien dan mudah dikembangkan.
 
-
-
-
-
+Fitur seperti pengiriman email, pembuatan sertifikat, ekspor laporan, penjadwalan task, serta monitoring menggunakan Flower berhasil diimplementasikan dan berjalan sesuai kebutuhan. Pengalaman ini juga memberikan pemahaman yang lebih baik mengenai penerapan arsitektur backend modern, khususnya pada aplikasi berskala menengah hingga besar.

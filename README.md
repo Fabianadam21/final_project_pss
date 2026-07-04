@@ -1,33 +1,56 @@
 # Final Project: Learning Management System (LMS)
 
-Simple LMS adalah sistem manajemen pembelajaran berbasis web yang dibangun dengan Django REST Framework. Proyek ini mengintegrasikan teknologi modern seperti Celery untuk background processing, Redis untuk caching, MongoDB untuk logging, dan RabbitMQ sebagai message broker.
+Simple LMS adalah sistem manajemen pembelajaran berbasis web yang dibangun dengan Django REST Framework. Proyek ini menonjolkan kemampuan asynchronous untuk menjaga responsivitas dan otomatisasi proses berat.
 
-Sistem mendukung tiga peran pengguna (Admin, Instructor, Student) untuk mengelola course, enrollment, tracking progress, serta generate sertifikat dan laporan secara otomatis dengan proses asynchronous.
+> Catatan penting: repository awal digunakan sebagai referensi struktur. Fitur asynchronous, monitoring, dan perbaikan Docker diselesaikan dan disesuaikan secara mandiri.
 
+## Ringkasan Teknologi
+
+- Django REST Framework
+- PostgreSQL
+- Celery + RabbitMQ
+- Redis
+- MongoDB
+- Docker Compose
+- Flower
+- ReportLab dan CSV
+
+## Fitur Utama
+
+- Email notification asynchronous ketika user mendaftar course
+- Generate certificate PDF secara asynchronous
+- Export report CSV secara asynchronous
+- Scheduler Celery Beat untuk update statistik dan laporan harian
+- Endpoint monitoring task: `/api/tasks/{task_id}`
+- Flower monitoring di `http://localhost:5555`
+
+## Dukungan Role
+
+- Admin
+- Instructor
+- Student
 
 ## Model Utama
 
-| Model | Keterangan |
-|-------|------------|
-| **User** | Menyimpan data pengguna dengan peran **Admin**, **Instructor**, dan **Student**. |
-| **Course** | Menyimpan informasi utama mengenai mata kuliah, seperti nama, deskripsi, harga, dan pengajar. |
-| **CourseContent** | Menyimpan materi pembelajaran (lesson) yang terdapat pada setiap course. |
-| **CourseMember** | Menyimpan data mahasiswa yang telah melakukan enrollment pada suatu course. |
-| **CourseContentCompletion** | Menyimpan progress pembelajaran berdasarkan lesson yang telah diselesaikan oleh mahasiswa. |
-| **Comment** | Menyimpan komentar yang diberikan mahasiswa pada materi pembelajaran. |
+| Model | Fungsi |
+|-------|--------|
+| **User** | Menyimpan data pengguna dan role **Admin**, **Instructor**, **Student** |
+| **Course** | Menyimpan informasi course seperti judul, deskripsi, harga, dan pengajar |
+| **CourseContent** | Menyimpan materi pembelajaran untuk setiap course |
+| **CourseMember** | Menyimpan data mahasiswa yang sudah terdaftar pada course |
+| **CourseContentCompletion** | Menyimpan progress mahasiswa terhadap lesson |
+| **Comment** | Menyimpan komentar mahasiswa pada materi pembelajaran |
 
+## Fitur Tambahan (Custom)
 
-## Fitur Utama - Async Processing & Notification
-
-| No | Fitur | Deskripsi |
+| No | Fitur | Keterangan |
 |----|-------|-----------|
-| 1 | **Email Notification (Async)** | Mengirim email atau mock email secara asynchronous menggunakan Celery. |
-| 2 | **Generate Certificate (Async)** | Membuat sertifikat PDF sebagai background task menggunakan ReportLab. |
-| 3 | **Export Report (Async)** | Mengekspor laporan dalam format CSV sebagai background task. |
-| 4 | **Scheduled Task (Celery Beat)** | Menjalankan task pembaruan statistik course secara otomatis setiap satu jam. |
-| 5 | **Task Status Endpoint** | Menyediakan endpoint `/api/tasks/{task_id}` untuk mengecek status task asynchronous. |
-| 6 | **Flower Monitoring** | Monitoring worker Celery melalui Flower yang dapat diakses di `http://localhost:5555`. |
-
+| 1 | Email Notification Async | Mengirim email/background notification secara asynchronous dengan Celery |
+| 2 | Generate Certificate Async | Membuat sertifikat PDF di background menggunakan ReportLab |
+| 3 | Export Report Async | Mengekspor laporan CSV di background |
+| 4 | Scheduled Task | Menjalankan task `update_course_statistics` dan `send_daily_report` secara otomatis |
+| 5 | Task Status Endpoint | Monitoring status task dengan `/api/tasks/{task_id}` |
+| 6 | Flower Monitoring | Monitoring Celery worker melalui `http://localhost:5555` |
 
 ## Cara Menjalankan Project
 
@@ -39,43 +62,37 @@ git clone https://github.com/Fabianadam21/final_project_pss.git
 
 ### 2. Jalankan Docker Compose
 
-Pertama kali (build image baru):
 ```bash
 docker compose up -d --build
 ```
 
-Jika sudah ada:
+Jika image sudah tersedia:
+
 ```bash
 docker compose up -d
 ```
+![alt text](image-1.png)
 
-![alt text](image-33.png)
-
-### 3. Pastikan Container Berjalan
+### 3. Periksa container
 
 ```bash
 docker ps
 ```
+![alt text](image-2.png)
 
-![alt text](image-34.png)
-
-### 4. Buat migration dahulu
+### 4. Migrasi database
 
 ```bash
 docker compose exec app python manage.py makemigrations
 ```
-
-![alt text](image-35.png)
-
-### 5. Jalankan migration
+![alt text](image-3.png)
 
 ```bash
 docker compose exec app python manage.py migrate
 ```
-
 ![alt text](image-4.png)
 
-### 6. Seed Data
+### 5. Seed data
 
 ```bash
 docker compose exec app python manage.py seed_data
@@ -83,14 +100,12 @@ docker compose exec app python manage.py seed_data
 
 ![alt text](image-5.png)
 
-### 7. Menghentikan Project
+### 6. Hentikan project
 
 ```bash
 docker compose stop
 ```
 ![alt text](image-6.png)
-
-
 
 ## Akun Demo
 

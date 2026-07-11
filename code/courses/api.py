@@ -11,7 +11,7 @@ from django.utils import timezone
 # Import Celery untuk task status
 from celery.result import AsyncResult
 
-from courses.models import Course, CourseMember, CourseContent, CourseContentCompletion
+from courses.models import Course, CourseMember, CourseContent, CourseContentCompletion, Comment
 from courses.schemas import *
 from courses.auth import auth, create_token, decode_token
 from courses.permissions import *

@@ -5,7 +5,7 @@ services:
     container_name: lms-app
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
-      - ./code:/code
+      - ./code:/app
       - ./media:/app/media
     ports:
       - "8000:8000"
@@ -71,7 +71,7 @@ services:
     container_name: lms-celery-worker
     command: celery -A lms worker --loglevel=info
     volumes:
-      - ./code:/code
+      - ./code:/app
       - ./media:/app/media
     depends_on:
       - redis
@@ -88,7 +88,7 @@ services:
     container_name: lms-celery-beat
     command: celery -A lms beat --loglevel=info
     volumes:
-      - ./code:/code
+      - ./code:/app
     depends_on:
       - redis
       - rabbitmq
@@ -100,6 +100,8 @@ services:
     build: .
     container_name: lms-flower
     command: celery -A lms flower --port=5555 --address=0.0.0.0
+    volumes:
+      - ./code:/app
     ports:
       - "5555:5555"
     depends_on:

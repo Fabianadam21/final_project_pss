@@ -42,7 +42,7 @@ class CourseMember(models.Model):
     course_id = models.ForeignKey(
         Course,
         verbose_name="matkul",
-        on_delete=models.RESTRICT
+        on_delete=models.CASCADE
     )
 
     user_id = models.ForeignKey(
@@ -82,13 +82,13 @@ class CourseContent(models.Model):
     course_id = models.ForeignKey(
         Course,
         verbose_name="matkul",
-        on_delete=models.RESTRICT
+        on_delete=models.CASCADE
     )
 
     parent_id = models.ForeignKey(
         "self",
         verbose_name="induk",
-        on_delete=models.RESTRICT,
+        on_delete=models.CASCADE,
         null=True,
         blank=True
     )
